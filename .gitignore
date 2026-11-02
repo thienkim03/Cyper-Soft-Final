@@ -2,7 +2,7 @@
 __pycache__/
 .ipynb_checkpoints/
 log/*.log
-cheatsheet/*.md
+docs/cheatsheet/*.md
 
 data/raw/*.csv
 data/interim/*
