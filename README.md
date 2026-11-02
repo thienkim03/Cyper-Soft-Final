@@ -80,7 +80,8 @@ users ──< orders ──< order_items >── products >── distribution_c
 ├── reports/
 │   ├── figures/               # Biểu đồ dùng trong báo cáo
 │   └── slides/                # Slide thuyết trình
-├── docs/                      # Đề bài, data dictionary, ghi chú nghiệp vụ
+├── docs/
+│   └── cheatsheet/            # Lệnh terminal: PowerShell, git, uv
 ├── log/                       # Log ETL: ETL_Project_YYYYMMDD.log
 ├── pyproject.toml / uv.lock   # Khai báo thư viện (quản lý bằng uv)
 └── README.md
