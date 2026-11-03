@@ -7,10 +7,10 @@ Dự án phân tích dữ liệu thương mại điện tử (bán quần áo on
 | Giai đoạn | Trạng thái |
 |---|---|
 | Thu thập dữ liệu gốc (7 bảng CSV) | Xong |
-| EDA cơ bản | Đang làm - `notebooks/01_eda_for_etl.ipynb` |
+| EDA cơ bản (nháp) | Đang làm - `notebooks/00_scrapt.ipynb` |
 | ETL - Extract | Xong |
-| ETL - Transform | Đang làm |
-| ETL - Load | Chưa làm |
+| ETL - Transform | Xong |
+| ETL - Load | Xong - MySQL database `looker_ecommerce` |
 | SQL staging / marts | Chưa làm |
 | Dashboard BI | Chưa làm |
 | Báo cáo & slide | Chưa làm |
@@ -64,8 +64,8 @@ users ──< orders ──< order_items >── products >── distribution_c
 │   ├── interim/               # Kết quả trung gian giữa các bước làm sạch
 │   └── processed/             # Dữ liệu sạch, dùng cho phân tích / BI
 ├── notebooks/
-│   ├── 01_eda_for_etl.ipynb   # EDA: đọc 7 bảng, kiểm tra kiểu dữ liệu
-│   └── 02_etl_pipeline.ipynb  # ETL: extract -> transform -> load, có ghi log
+│   ├── 00_scrapt.ipynb        # EDA: đọc 7 bảng, kiểm tra kiểu dữ liệu
+│   └── 01_etl_pipeline.ipynb  # ETL: extract -> transform -> load, có ghi log
 ├── src/
 │   ├── utils/                 # Hàm tiện ích dạng function (dùng nhiều nhất)
 │   ├── analysis/              # Class phân tích EDA (Strategy/Template pattern)
@@ -117,13 +117,14 @@ File này chứa mật khẩu nên đã bị loại khỏi git - mỗi người 
    - thêm `src/` vào `sys.path` (nên `from utils.db import *` chạy được).
 3. Chạy theo thứ tự số: `01_` -> `02_` -> ...
 
-**Pipeline ETL** (`02_etl_pipeline.ipynb`):
+**Pipeline ETL** (`01_etl_pipeline.ipynb`):
 
 | Bước | Hàm | Việc làm |
 |---|---|---|
 | Extract | `extract()` | Đọc 7 file CSV từ `data/raw/`, log số dòng mỗi bảng |
-| Transform | `transform()` | Ép kiểu ngày (ISO8601), điền giá trị thiếu (`Unknown Product`, `Unknown Brand`), tạo cột `time_to_sell` |
-| Load | - | Chưa làm. Dự kiến ghi ra `data/processed/` và/hoặc MySQL |
+| Transform | `transform()` | Ép kiểu ngày (ISO8601), điền giá trị thiếu (`Unknown Product`, `Unknown Brand`, `Unknown City`), tạo cột `time_to_sell` |
+| Load | `load()` | Ghi 7 bảng vào MySQL (`LOOKER_ECOMMERCE` trong `src/utils/config.py`), `if_exists='replace'` |
+| Main | - | Chạy `extract()` -> `transform()` -> `load()` |
 
 Log ghi đồng thời ra màn hình và `log/ETL_Project_YYYYMMDD.log`.
 
