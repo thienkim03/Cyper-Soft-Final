@@ -7,5 +7,5 @@ docs/cheatsheet/*.md
 data/raw/*.csv
 data/interim/*
 !data/interim/.gitkeep
-
+docs/*.md
 src/utils/config.py
