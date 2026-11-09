@@ -11,7 +11,9 @@ Dự án phân tích dữ liệu thương mại điện tử (bán quần áo on
 | ETL - Extract | Xong |
 | ETL - Transform | Xong |
 | ETL - Load | Xong - MySQL database `looker_ecommerce` |
+| Advanced EDA | Xong - `notebooks/02_eda.ipynb`, giải thích tại `docs/eda_explanation.md` |
 | SQL staging / marts | Chưa làm |
+| Power BI - Import + Data model | Đang làm - file `Dashboard Looker Peformance` |
 | Dashboard BI | Chưa làm |
 | Báo cáo & slide | Chưa làm |
 
@@ -65,7 +67,8 @@ users ──< orders ──< order_items >── products >── distribution_c
 │   └── processed/             # Dữ liệu sạch, dùng cho phân tích / BI
 ├── notebooks/
 │   ├── 00_scrapt.ipynb        # EDA: đọc 7 bảng, kiểm tra kiểu dữ liệu
-│   └── 01_etl_pipeline.ipynb  # ETL: extract -> transform -> load, có ghi log
+│   ├── 01_etl_pipeline.ipynb  # ETL: extract -> transform -> load, có ghi log
+│   └── 02_eda.ipynb           # Advanced EDA: phân phối, outlier, tương quan, funnel
 ├── src/
 │   ├── utils/                 # Hàm tiện ích dạng function (dùng nhiều nhất)
 │   ├── analysis/              # Class phân tích EDA (Strategy/Template pattern)
@@ -78,9 +81,13 @@ users ──< orders ──< order_items >── products >── distribution_c
 │   ├── themes/                # Theme màu, logo
 │   └── exports/               # Ảnh / PDF xuất từ dashboard
 ├── reports/
-│   ├── figures/               # Biểu đồ dùng trong báo cáo
+│   ├── figures/               # Biểu đồ dùng trong báo cáo (eda_*.png từ 02_eda.ipynb)
 │   └── slides/                # Slide thuyết trình
 ├── docs/
+│   ├── project_workflow.md    # Quy trình cả project, câu SQL import Power BI, DAX
+│   ├── eda_explanation.md     # Giải thích notebook EDA + insight
+│   ├── presentation_notes.md  # Lời nói thuyết trình + câu hỏi Q&A
+│   ├── guide/                 # Hướng dẫn học tập: thiết kế Power BI, tìm insight, tips project
 │   └── cheatsheet/            # Lệnh terminal: PowerShell, git, uv
 ├── log/                       # Log ETL: ETL_Project_YYYYMMDD.log
 ├── pyproject.toml / uv.lock   # Khai báo thư viện (quản lý bằng uv)
@@ -130,13 +137,94 @@ Log ghi đồng thời ra màn hình và `log/ETL_Project_YYYYMMDD.log`.
 
 ---
 
-## 5. Thư viện code trong `src/`
+## 5. Mô hình dữ liệu Power BI
+
+Dữ liệu được import từ MySQL bằng câu SQL ngay tại bước Get Data (chi tiết từng câu trong [docs/project_workflow.md](docs/project_workflow.md)).
+
+### 5.1. Vì sao có 2 bảng fact: `orders` và `order_items` khác nhau thế nào
+
+Hai bảng khác nhau ở **grain** (mức chi tiết - mỗi dòng đại diện cho cái gì):
+
+| | `fact_orders` | `fact_order_items` |
+|---|---|---|
+| 1 dòng là | 1 **đơn hàng** | 1 **món hàng** trong đơn |
+| Số dòng | 125.226 | 181.759 |
+| Có giá tiền | Không | Có (`sale_price`, `cost`, `gross_profit`) |
+| Gắn với sản phẩm | Không | Có (`product_id`) |
+| Cột riêng | `num_of_item` (đơn có mấy món, 1-4) | `distribution_center_id` |
+
+Ví dụ: khách đặt 1 đơn gồm 1 áo + 1 quần -> `fact_orders` có **1 dòng**, `fact_order_items` có **2 dòng** cùng `order_id`.
+
+Đã kiểm tra khi làm ETL: số món đếm trong `order_items` khớp 100% với `num_of_item`, và `status` của từng món luôn giống `status` của đơn.
+
+**Dùng bảng nào cho chỉ số nào:**
+- **Doanh thu, Lợi nhuận** -> `fact_order_items` (chỉ bảng này có giá và nối được với sản phẩm).
+- **Tỷ lệ hủy đơn** -> `fact_orders` (đề hỏi theo **đơn**; nếu đếm trên `order_items`, đơn 4 món bị hủy sẽ bị tính thành 4 lần).
+
+### 5.2. Sơ đồ model (Star Schema)
+
+```
+                      dim_products
+                           | 1
+                           |
+                           * 
+ dim_users 1 ---- * fact_order_items * ---- 1 dim_distribution_centers
+     1 |                   * 
+       |                   |
+       *                   | 1
+  fact_orders * ------ 1 dim_date
+```
+
+- Mỗi bảng fact cùng các dim của nó là một star schema. Hai fact dùng chung `dim_users` và `dim_date` nên lọc đồng bộ được.
+- Mọi quan hệ là **One-to-many** (dim là phía 1, fact là phía nhiều), chiều lọc **Single**.
+
+| Dim (1) | Fact (nhiều) | Cột nối |
+|---|---|---|
+| `dim_products` | `fact_order_items` | `product_id` |
+| `dim_users` | `fact_order_items` | `user_id` |
+| `dim_distribution_centers` | `fact_order_items` | `distribution_center_id` |
+| `dim_users` | `fact_orders` | `user_id` |
+| `dim_date` | `fact_order_items` | `Date` -> `order_date` |
+| `dim_date` | `fact_orders` | `Date` -> `order_date` |
+
+### 5.3. Những quan hệ cố ý KHÔNG tạo
+
+| Quan hệ | Lý do không tạo |
+|---|---|
+| `fact_orders` <-> `fact_order_items` (qua `order_id`) | Fact nối fact tạo 2 lối đi từ `dim_users` tới `fact_orders` -> Power BI phải tắt 1 đường, bộ lọc khách hàng không còn tác động lên Tỷ lệ hủy |
+| `dim_products` <-> `dim_distribution_centers` | Fact đã có `distribution_center_id`; nối thêm tạo 2 lối đi (ambiguous) và biến model thành snowflake |
+| `events` | Không import: dữ liệu click web (khác grain), 46% dòng không có `user_id`, 2,4 triệu dòng. Dành cho phần EDA |
+
+### 5.4. Bảng `dim_date`
+
+Tạo bằng DAX trong Power BI (không lấy từ MySQL), đánh dấu **Mark as date table**. Cần cho các hàm Time Intelligence (MoM, YoY).
+Tắt **Auto date/time** để Power BI không tự sinh bảng ngày ẩn cho từng cột ngày.
+
+---
+
+## 6. Advanced EDA
+
+Notebook [notebooks/02_eda.ipynb](notebooks/02_eda.ipynb), cấu trúc bám theo notebook mẫu của khóa học. Đọc dữ liệu đã sạch từ MySQL (1 dòng = 1 món hàng, join 6 bảng), phần funnel đọc bảng `events` đã gom bằng SQL.
+
+| Phần | Nội dung | Biểu đồ |
+|---|---|---|
+| Chất lượng | Null, trùng, lỗi logic thời gian | - |
+| Xu hướng & phân phối | `describe`, skew, histogram, doanh thu theo tháng/năm, boxplot | `eda_01`, `eda_02`, `eda_03` |
+| Outlier | IQR, ảnh hưởng tới doanh thu, lý do giữ lại | - |
+| Đa biến & tương quan | Heatmap món hàng / khách hàng, giá và thời gian giao vs hủy/trả, danh mục doanh thu vs biên lợi nhuận, mua lại | `eda_04`, `eda_05` |
+| Insight phụ | Funnel xem -> giỏ -> mua từ bảng `events` | `eda_06` |
+
+Giải thích chi tiết và số liệu: [docs/eda_explanation.md](docs/eda_explanation.md).
+
+---
+
+## 7. Thư viện code trong `src/`
 
 ### `src/utils/` - hàm tiện ích
 
 | File | Hàm | Công dụng |
 |---|---|---|
-| `config.py` | `DB_CONFIG`, `SAKILA_CONFIG`, `INTRO_DE` | Thông tin kết nối MySQL |
+| `config.py` | `DB_CONFIG`, `SAKILA_CONFIG`, `INTRO_DE`, `LOOKER_ECOMMERCE` | Thông tin kết nối MySQL |
 | `db.py` | `make_engine`, `test_connection`, `load_main_dataset`, `load_main_dataset_chunked` | Kết nối MySQL, đọc dữ liệu (kể cả theo chunk) |
 | `cleaning.py` | `optimize_dtypes`, `quality_report`, `check_duplicates`, `check_data_issues`, `add_datetime_features` (+ bản `_chunked`) | Giảm RAM, báo cáo chất lượng dữ liệu, tạo cột ngày/tháng/năm |
 | `outlier.py` | `detect_outliers`, `outlier_summary`, `plot_outlier`, `cap_outliers` (+ bản `_chunked`) | Phát hiện và xử lý ngoại lai |
@@ -175,7 +263,7 @@ UnivariateAnalyzer(NumericalUnivariateAnalysis()).execute_analysis(df, 'num_of_i
 
 ---
 
-## 6. Luồng dữ liệu
+## 8. Luồng dữ liệu
 
 ```
 data/raw  ->  data/interim  ->  data/processed  ->  sql/marts  ->  bi/dashboards  ->  reports
@@ -187,7 +275,7 @@ data/raw  ->  data/interim  ->  data/processed  ->  sql/marts  ->  bi/dashboards
 
 ---
 
-## 7. Quy ước
+## 9. Quy ước
 
 - Notebook đánh số theo thứ tự chạy: `01_`, `02_`, ...
 - Tên file dữ liệu: `ten_bang_YYYYMMDD.csv` hoặc `.parquet`.
