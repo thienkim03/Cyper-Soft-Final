@@ -45,10 +45,10 @@ flowchart LR
 Cách mọi người hay làm: **vẽ nền bên ngoài -> xuất ảnh PNG -> đặt làm Canvas background**. Visual trong Power BI chỉ cần đặt lên các ô có sẵn.
 
 ### Bước làm bằng PowerPoint (dễ nhất)
-1. PowerPoint -> Design -> Slide Size -> **Custom: 13,333 x 7,5 inch** (tỷ lệ 16:9, bằng canvas mặc định 1280x720 của Power BI).
+1. PowerPoint -> Design -> Slide Size -> **Custom: 13,333 x 7,5 inch** (tỷ lệ 16:9). Kiểm tra kích thước trang Power BI ở Design -> Page size (bản mới thường là 1920x1080).
 2. Vẽ: thanh tiêu đề, các ô bo góc cho KPI và chart, có thể thêm bóng đổ nhẹ, logo, icon.
 3. Chuột phải vào slide -> **Save as Picture** -> PNG.
-4. Power BI: chọn trang (bấm vào chỗ trống) -> **Format page** -> **Canvas background** -> Image -> chọn file PNG -> **Image fit: Fit**, **Transparency: 0%**.
+4. Power BI: chọn trang (bấm vào chỗ trống) -> **Format page** -> **Canvas background** -> Image -> chọn file PNG -> **Image fit: Stretch**, **Transparency: 0%**. Ảnh và trang cùng tỷ lệ 16:9 nên Stretch không làm méo. Không dùng Fit: nếu ảnh nhỏ hơn trang (vd 1280x720 trên trang 1920x1080), Fit giữ nguyên cỡ ảnh nên bị hở viền.
 5. Với từng visual: Format -> General -> Effects -> **tắt Background** (hoặc transparency 100%) để visual "nằm" trên ô của nền.
 
 ### Làm bằng Canva
@@ -75,7 +75,7 @@ Cách mọi người hay làm: **vẽ nền bên ngoài -> xuất ảnh PNG -> �
 Theme là file JSON chứa màu mặc định cho chart (`dataColors`), màu chữ, font, nền visual... Đặt theme 1 lần thì mọi visual mới tạo ra đều đúng màu, không phải chỉnh tay từng cái.
 
 ### Cách đổi theme
-1. **View** -> **Themes** -> chọn theme có sẵn, hoặc:
+1. Tab **Design** -> nhóm **Themes** -> chọn theme có sẵn, hoặc: (bản Power BI cũ thì Themes nằm ở tab **View**)
 2. **Customize current theme**: đổi Name and colors (màu 1-8 là màu các series chart), Text (font, cỡ chữ), Visuals (nền, viền), Page (màu nền trang).
 3. **Save current theme** -> lưu file JSON vào `bi/themes/` để dùng lại cho file khác.
 4. **Browse for themes** -> nạp file JSON có sẵn (tự làm hoặc tải từ trang tạo theme).
