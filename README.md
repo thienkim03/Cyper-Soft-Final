@@ -87,7 +87,7 @@ users ──< orders ──< order_items >── products >── distribution_c
 │   ├── project_workflow.md    # Quy trình cả project, câu SQL import Power BI, DAX
 │   ├── eda_explanation.md     # Giải thích notebook EDA + insight
 │   ├── presentation_notes.md  # Lời nói thuyết trình + câu hỏi Q&A
-│   ├── guide/                 # Hướng dẫn học tập: thiết kế Power BI, tìm insight, tips project
+│   ├── guide/                 # Hướng dẫn học tập: thiết kế Power BI, tìm insight, tips project, DAX A-Z
 │   └── cheatsheet/            # Lệnh terminal: PowerShell, git, uv
 ├── log/                       # Log ETL: ETL_Project_YYYYMMDD.log
 ├── pyproject.toml / uv.lock   # Khai báo thư viện (quản lý bằng uv)
