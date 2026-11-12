@@ -460,7 +460,13 @@ Gắn vào tiêu đề visual: Format -> General -> Title -> Text -> nút **fx**
 ```dax
 Color MoM =
 if([Revenue MoM %] >= 0, "#17A589", "#E74C3C")
+
+-- Chỉ số "tăng là xấu" (tỷ lệ hủy, tỷ lệ trả): đảo màu
+Color Cancel vs LM =
+if([Cancel Rate vs LM] > 0, "#E74C3C", "#17A589")
 ```
+
+**Gắn màu vào số so sánh trên Card (new):** chọn card -> Format visual -> **Reference labels** -> **Detail** -> Color -> **fx** -> Format style: **Field value** -> chọn measure màu. Tô cả ô nền của Detail thì làm tương tự ở **Background**, dùng màu nhạt (`#FDEDEC` đỏ nhạt, `#E8F8F5` xanh nhạt).
 
 ---
 
@@ -516,6 +522,7 @@ summarizecolumns(
 | Tỷ lệ % sai, lớn hơn 100% | Dùng calculated column rồi Sum, hoặc chia trên từng dòng | Viết thành measure với `divide(tổng, tổng)` |
 | Lỗi "A single value for column... cannot be determined" | Viết `fact_orders[status]` trần trong measure (measure không có row context) | Bọc trong hàm tổng hợp, hoặc dùng `selectedvalue` |
 | Lỗi chia cho 0 / Infinity | Dùng `/` | Dùng `divide()` |
+| Measure LM / LY ra số lạ, không khớp tháng trước | Viết lại công thức gốc trong measure LM (`calculate(sum(cột_khác), dateadd(...))`) nên lệch cột hoặc thiếu bộ lọc status. Gặp trong project: `Revenue LM` cộng nhầm `gross_profit` | Measure LM luôn gọi lại measure gốc: `calculate([Total Revenue], dateadd(...))` -> sửa 1 chỗ là đúng hết |
 | Tổng (Total) của bảng không bằng tổng các dòng | Bình thường với measure tỷ lệ: Total tính lại trên toàn bộ, không cộng các dòng | Hiểu đúng hành vi; nếu cần tổng các dòng dùng `sumx(values(...), [measure])` |
 | Slicer không lọc được visual | Edit interactions đang tắt, hoặc slicer lấy cột từ bảng không nối | Format -> Edit interactions; dùng cột từ bảng dim |
 
@@ -602,6 +609,76 @@ Cancel Rate vs LM = [Cancel Rate %] - [Cancel Rate LM]
 
 Margin LM = calculate([Profit Margin %], dateadd(dim_date[Date], -1, month))
 Margin vs LM = [Profit Margin %] - [Margin LM]
+```
+
+### 3b. Measure cho trang 2 (Products & Customers) và trang 3 (Operations)
+
+Đã chạy thử trên model (tháng 12/2023): AOV 84,71$, Active Customers 5.946, Revenue per Customer 91,27$, Items per Order 1,42, Return Rate 10,0%, Revenue Lost 177.915$, Avg Delivery Days 2,48.
+
+```dax
+-- Khach co it nhat 1 mon khong bi huy / tra trong ky
+Active Customers =
+calculate(
+    distinctcount(fact_order_items[user_id]),
+    not fact_order_items[status] in {"Cancelled", "Returned"}
+)
+
+Revenue per Customer = divide([Total Revenue], [Active Customers])
+
+-- So mon trung binh moi don (chi tinh don co doanh thu)
+Items per Order =
+divide(
+    calculate(countrows(fact_order_items), not fact_order_items[status] in {"Cancelled", "Returned"}),
+    [Net Orders]
+)
+
+-- Thoi gian van chuyen trung binh (ngay), chi xet mon da giao
+Avg Delivery Days =
+averagex(
+    filter(fact_order_items, not isblank(fact_order_items[delivered_at])),
+    datediff(fact_order_items[shipped_at], fact_order_items[delivered_at], hour) / 24
+)
+```
+
+- `datediff(..., hour) / 24` thay vì `datediff(..., day)`: `day` chỉ đếm số lần qua nửa đêm (giao lúc 23h, nhận lúc 1h sáng hôm sau vẫn tính là 1 ngày). Đổi ra giờ rồi chia 24 cho số ngày chính xác hơn.
+- `filter(..., not isblank(...))`: bỏ món chưa giao, nếu không `datediff` với ô trống sẽ làm sai trung bình.
+
+**LM và so sánh** - cùng 1 mẫu cho mọi measure:
+
+```dax
+AOV LM = calculate([Avg Order Value], dateadd(dim_date[Date], -1, month))
+AOV MoM % = divide([Avg Order Value] - [AOV LM], [AOV LM])
+
+Customers LM = calculate([Active Customers], dateadd(dim_date[Date], -1, month))
+Customers MoM % = divide([Active Customers] - [Customers LM], [Customers LM])
+
+Rev per Customer LM = calculate([Revenue per Customer], dateadd(dim_date[Date], -1, month))
+Rev per Customer MoM % = divide([Revenue per Customer] - [Rev per Customer LM], [Rev per Customer LM])
+
+Items per Order LM = calculate([Items per Order], dateadd(dim_date[Date], -1, month))
+Items per Order MoM % = divide([Items per Order] - [Items per Order LM], [Items per Order LM])
+
+Return Rate LM = calculate([Return Rate %], dateadd(dim_date[Date], -1, month))
+Return Rate vs LM = [Return Rate %] - [Return Rate LM]
+
+Revenue Lost LM = calculate([Revenue Lost], dateadd(dim_date[Date], -1, month))
+Revenue Lost MoM % = divide([Revenue Lost] - [Revenue Lost LM], [Revenue Lost LM])
+
+Delivery Days LM = calculate([Avg Delivery Days], dateadd(dim_date[Date], -1, month))
+Delivery Days MoM % = divide([Avg Delivery Days] - [Delivery Days LM], [Delivery Days LM])
+```
+
+**Measure màu** (Card -> Reference labels -> Detail -> Color -> fx -> Field value):
+
+```dax
+-- Tang la tot (trang 1, trang 2)
+Color Revenue MoM = if([Revenue MoM %] < 0, "#E74C3C", "#17A589")
+
+-- Tang la xau (trang 3): dao nguoc
+Color Cancel vs LM = if([Cancel Rate vs LM] > 0, "#E74C3C", "#17A589")
+Color Return vs LM = if([Return Rate vs LM] > 0, "#E74C3C", "#17A589")
+Color Revenue Lost MoM = if([Revenue Lost MoM %] > 0, "#E74C3C", "#17A589")
+Color Delivery MoM = if([Delivery Days MoM %] > 0, "#E74C3C", "#17A589")
 ```
 
 ### 4. Định dạng đề xuất
