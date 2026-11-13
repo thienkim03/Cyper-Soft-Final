@@ -361,6 +361,55 @@ Cancel Rate vs LM = [Cancel Rate %] - [Cancel Rate LM]
 
 Tỷ lệ hủy 15% -> 16% là "+1 điểm %", không phải "+6,7%".
 
+### So sánh linh hoạt: chọn tháng thì so LM, bỏ tháng thì so LY
+
+Muốn slicer Month cho phép "bỏ chọn" để xem cả năm. Khi đó so với tháng trước (LM) không còn đúng: `dateadd(-1, month)` trên cả năm sẽ ra 12/năm trước -> 11/năm nay. Phải đổi sang so với năm trước (LY).
+
+```dax
+Revenue LY = calculate([Total Revenue], sameperiodlastyear(dim_date[Date]))
+
+-- PP = previous period: có lọc Month -> LM, không lọc -> LY
+Revenue PP = if(hasonevalue(dim_date[month]), [Revenue LM], [Revenue LY])
+
+Revenue vs PP % = divide([Total Revenue] - [Revenue PP], [Revenue PP])
+
+-- nhãn đổi theo bộ lọc, dùng cho Reference label hoặc tiêu đề
+Period Label = if(hasonevalue(dim_date[month]), "LM", "LY")
+```
+
+- `hasonevalue(cột)`: TRUE khi bộ lọc hiện tại chỉ còn đúng 1 tháng. Slicer Month để trống / Select all -> 12 tháng -> FALSE -> dùng LY.
+- Dùng `hasonevalue` thay vì `isfiltered`: slicer dùng `month` hay `month_name` thì kết quả vẫn đúng, vì lọc `month_name` = Dec thì `month` cũng chỉ còn 12.
+- Tỷ lệ làm tương tự: `Margin LY = calculate([Profit Margin %], sameperiodlastyear(dim_date[Date]))`, `Margin PP = if(hasonevalue(dim_date[month]), [Margin LM], [Margin LY])`, `Margin vs PP = [Profit Margin %] - [Margin PP]`.
+- Card đang dùng `Revenue LM` / `Revenue MoM %` thì thay bằng `Revenue PP` / `Revenue vs PP %`. Measure màu cũng đổi sang `vs PP`.
+
+### So sánh 2 năm bất kỳ (slicer "Compare Year")
+
+Cách 1, không cần DAX: line chart X = `month`, Y = `Total Revenue`, **Legend = `dim_date[year]`**. Mỗi năm là 1 đường, chồng lên nhau theo 12 tháng. Tắt Edit interactions của slicer Year với chart này để thấy mọi năm.
+
+Cách 2, chọn năm so sánh tùy ý: tạo bảng **không nối quan hệ** để làm slicer thứ 2.
+
+```dax
+-- Modeling -> New table. KHÔNG tạo relationship cho bảng này
+Compare Year = distinct(dim_date[year])
+
+Revenue Compare = 
+var y = selectedvalue('Compare Year'[year])
+return calculate([Total Revenue], dim_date[year] = y)
+
+Revenue vs Compare % = divide([Total Revenue] - [Revenue Compare], [Revenue Compare])
+
+Compare Label = "vs " & selectedvalue('Compare Year'[year])
+```
+
+- Bảng `Compare Year` không có relationship nên chọn năm ở đây **không lọc** dữ liệu, chỉ để measure đọc giá trị bằng `selectedvalue`.
+- `calculate(..., dim_date[year] = y)` chỉ thay bộ lọc năm, **giữ nguyên** bộ lọc Month / Department / Country. Chọn 2023 + Dec, Compare 2021 -> so 12/2023 với 12/2021.
+- Tỷ lệ: `Margin Compare = calculate([Profit Margin %], dim_date[year] = y)`, rồi `[Profit Margin %] - [Margin Compare]` (pts).
+- Chưa chọn Compare Year -> `selectedvalue` trả blank -> measure blank. Đặt slicer single select, mặc định năm trước.
+
+Đã kiểm tra: năm 2023 = 3,821,822.73, Compare 2021 = 1,090,479.32. Tháng 12/2023 = 542,673.34, Compare 12/2021 = 118,909.58.
+
+Đã kiểm tra (12/2022): có lọc tháng -> PP = 193,452.21 (= Revenue LM). Chỉ lọc năm 2022 -> Revenue 1,867,969.50, PP = 1,090,479.32 (= năm 2021).
+
 ### Lưu ý với dữ liệu project
 - Dữ liệu kết thúc ngày **21/01/2024**: tháng 01/2024 thiếu ngày -> MoM, YoY của tháng này giảm giả tạo. Không dùng tháng này để kết luận.
 - Năm 2024 chỉ có tháng 1 -> không so YoY cả năm 2024 với 2023.
