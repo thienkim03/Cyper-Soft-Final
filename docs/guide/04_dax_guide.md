@@ -581,6 +581,76 @@ summarizecolumns(
 
 Tạo trong bảng `_Measures`. Gợi ý Display folder ở đầu mỗi nhóm.
 
+### 0. Bộ card 3 trang theo kiểu PP (bản dùng chính thức)
+
+Mỗi KPI có 4 measure: **giá trị**, **PP** (chọn 1 tháng -> LM, bỏ chọn Month -> LY), **vs PP** (% hoặc pts), **Color**. Các mục 1-3b bên dưới là bản giải thích từng bước, giữ để học.
+
+```dax
+Period Label = if(hasonevalue(dim_date[month]), "LM", "LY")
+```
+
+**Trang 1 - Overview** (tăng là tốt)
+
+```dax
+Total Revenue = calculate(sum(fact_order_items[sale_price]), not fact_order_items[status] in {"Cancelled", "Returned"})
+Revenue PP = if(hasonevalue(dim_date[month]), calculate([Total Revenue], dateadd(dim_date[Date], -1, month)), calculate([Total Revenue], sameperiodlastyear(dim_date[Date])))
+Revenue vs PP % = divide([Total Revenue] - [Revenue PP], [Revenue PP])
+Color Revenue vs PP = if([Revenue vs PP %] < 0, "#E74C3C", "#17A589")
+
+Total Profit = calculate(sum(fact_order_items[gross_profit]), not fact_order_items[status] in {"Cancelled", "Returned"})
+Profit PP = if(hasonevalue(dim_date[month]), calculate([Total Profit], dateadd(dim_date[Date], -1, month)), calculate([Total Profit], sameperiodlastyear(dim_date[Date])))
+Profit vs PP % = divide([Total Profit] - [Profit PP], [Profit PP])
+Color Profit vs PP = if([Profit vs PP %] < 0, "#E74C3C", "#17A589")
+
+Total Orders = countrows(fact_orders)
+Orders PP = if(hasonevalue(dim_date[month]), calculate([Total Orders], dateadd(dim_date[Date], -1, month)), calculate([Total Orders], sameperiodlastyear(dim_date[Date])))
+Orders vs PP % = divide([Total Orders] - [Orders PP], [Orders PP])
+Color Orders vs PP = if([Orders vs PP %] < 0, "#E74C3C", "#17A589")
+
+Profit Margin % = divide([Total Profit], [Total Revenue])
+Margin PP = if(hasonevalue(dim_date[month]), calculate([Profit Margin %], dateadd(dim_date[Date], -1, month)), calculate([Profit Margin %], sameperiodlastyear(dim_date[Date])))
+Margin vs PP = [Profit Margin %] - [Margin PP]
+Color Margin vs PP = if([Margin vs PP] < 0, "#E74C3C", "#17A589")
+```
+
+**Trang 2 - Products & Customers** (tăng là tốt): xem mục 3a2 (Net Orders, Avg Order Value, Active Customers, Revenue per Customer, Items per Order + PP / vs PP / Color).
+
+**Trang 3 - Operations** (tăng là XẤU -> màu đảo ngược)
+
+```dax
+Cancel Rate % = divide(calculate(countrows(fact_orders), fact_orders[status] = "Cancelled"), [Total Orders])
+Cancel Rate PP = if(hasonevalue(dim_date[month]), calculate([Cancel Rate %], dateadd(dim_date[Date], -1, month)), calculate([Cancel Rate %], sameperiodlastyear(dim_date[Date])))
+Cancel Rate vs PP = [Cancel Rate %] - [Cancel Rate PP]
+Color Cancel Rate vs PP = if([Cancel Rate vs PP] > 0, "#E74C3C", "#17A589")
+
+Return Rate % = divide(calculate(countrows(fact_orders), fact_orders[status] = "Returned"), [Total Orders])
+Return Rate PP = if(hasonevalue(dim_date[month]), calculate([Return Rate %], dateadd(dim_date[Date], -1, month)), calculate([Return Rate %], sameperiodlastyear(dim_date[Date])))
+Return Rate vs PP = [Return Rate %] - [Return Rate PP]
+Color Return Rate vs PP = if([Return Rate vs PP] > 0, "#E74C3C", "#17A589")
+
+Revenue Lost = calculate(sum(fact_order_items[sale_price]), fact_order_items[status] in {"Cancelled", "Returned"})
+Revenue Lost PP = if(hasonevalue(dim_date[month]), calculate([Revenue Lost], dateadd(dim_date[Date], -1, month)), calculate([Revenue Lost], sameperiodlastyear(dim_date[Date])))
+Revenue Lost vs PP % = divide([Revenue Lost] - [Revenue Lost PP], [Revenue Lost PP])
+Color Revenue Lost vs PP = if([Revenue Lost vs PP %] > 0, "#E74C3C", "#17A589")
+
+Avg Delivery Days = averagex(filter(fact_order_items, not isblank(fact_order_items[delivered_at])), datediff(fact_order_items[shipped_at], fact_order_items[delivered_at], hour) / 24)
+Delivery Days PP = if(hasonevalue(dim_date[month]), calculate([Avg Delivery Days], dateadd(dim_date[Date], -1, month)), calculate([Avg Delivery Days], sameperiodlastyear(dim_date[Date])))
+Delivery Days vs PP % = divide([Avg Delivery Days] - [Delivery Days PP], [Delivery Days PP])
+Color Delivery Days vs PP = if([Delivery Days vs PP %] > 0, "#E74C3C", "#17A589")
+```
+
+Đã kiểm tra trang 3: 12/2023 (so LM) Cancel 14.2% vs 14.6%, Return 10.0% vs 10.2%, Revenue Lost 177,915 vs 152,269, Delivery 2.48 vs 2.58 ngày. Cả năm 2023 (so LY) Cancel 14.9% vs 14.9%, Return 10.1% vs 9.8%, Revenue Lost 1,281,018 vs 611,798, Delivery 2.52 vs 2.50 ngày.
+
+| Loại measure | Format |
+|---|---|
+| Revenue, Profit, Revenue Lost (+ PP) | `$`, 0 số lẻ |
+| AOV, Revenue per Customer (+ PP) | `$`, 2 số lẻ |
+| Orders, Active Customers (+ PP) | Số nguyên, phân cách hàng nghìn |
+| Items per Order, Avg Delivery Days (+ PP) | 2 số lẻ |
+| Margin, Cancel Rate, Return Rate (+ PP) | `0.0%` |
+| `... vs PP %` | `+0.0%;-0.0%;0.0%` |
+| `Margin / Cancel Rate / Return Rate vs PP` (pts) | `+0.00%;-0.00%;0.00%` hoặc nhân 100 rồi `+0.00" pts"` |
+
 ### 1. Revenue & Profit
 
 ```dax
@@ -659,6 +729,61 @@ Cancel Rate vs LM = [Cancel Rate %] - [Cancel Rate LM]
 Margin LM = calculate([Profit Margin %], dateadd(dim_date[Date], -1, month))
 Margin vs LM = [Profit Margin %] - [Margin LM]
 ```
+
+### 3a. Card trang Overview tự đổi LM / LY (cho nút Monthly / Yearly View)
+
+```dax
+Period Label = if(hasonevalue(dim_date[month]), "LM", "LY")
+
+Revenue LY = calculate([Total Revenue], sameperiodlastyear(dim_date[Date]))
+Revenue PP = if(hasonevalue(dim_date[month]), [Revenue LM], [Revenue LY])
+Revenue vs PP % = divide([Total Revenue] - [Revenue PP], [Revenue PP])
+Color Revenue vs PP = if([Revenue vs PP %] < 0, "#E74C3C", "#17A589")
+
+Profit LY = calculate([Total Profit], sameperiodlastyear(dim_date[Date]))
+Profit PP = if(hasonevalue(dim_date[month]), [Profit LM], [Profit LY])
+Profit vs PP % = divide([Total Profit] - [Profit PP], [Profit PP])
+Color Profit vs PP = if([Profit vs PP %] < 0, "#E74C3C", "#17A589")
+
+Orders LY = calculate([Total Orders], sameperiodlastyear(dim_date[Date]))
+Orders PP = if(hasonevalue(dim_date[month]), [Orders LM], [Orders LY])
+Orders vs PP % = divide([Total Orders] - [Orders PP], [Orders PP])
+Color Orders vs PP = if([Orders vs PP %] < 0, "#E74C3C", "#17A589")
+
+Margin LY = calculate([Profit Margin %], sameperiodlastyear(dim_date[Date]))
+Margin PP = if(hasonevalue(dim_date[month]), [Margin LM], [Margin LY])
+Margin vs PP = [Profit Margin %] - [Margin PP]
+Color Margin vs PP = if([Margin vs PP] < 0, "#E74C3C", "#17A589")
+```
+
+Đã kiểm tra: 12/2022 -> LM, Revenue +4.78%, Profit +4.40%, Orders +4.42%, Margin -0.19 pts (khớp card cũ). Cả năm 2023 -> LY, Revenue +104.6%, Profit +104.9%, Orders +102.4%, Margin +0.07 pts.
+
+### 3a2. Card trang 2 tự đổi LM / LY (viết gọn, không cần measure LM riêng)
+
+```dax
+Net Orders = calculate(distinctcount(fact_order_items[order_id]), not fact_order_items[status] in {"Cancelled", "Returned"})
+Avg Order Value = divide([Total Revenue], [Net Orders])
+AOV PP = if(hasonevalue(dim_date[month]), calculate([Avg Order Value], dateadd(dim_date[Date], -1, month)), calculate([Avg Order Value], sameperiodlastyear(dim_date[Date])))
+AOV vs PP % = divide([Avg Order Value] - [AOV PP], [AOV PP])
+Color AOV vs PP = if([AOV vs PP %] < 0, "#E74C3C", "#17A589")
+
+Active Customers = calculate(distinctcount(fact_order_items[user_id]), not fact_order_items[status] in {"Cancelled", "Returned"})
+Customers PP = if(hasonevalue(dim_date[month]), calculate([Active Customers], dateadd(dim_date[Date], -1, month)), calculate([Active Customers], sameperiodlastyear(dim_date[Date])))
+Customers vs PP % = divide([Active Customers] - [Customers PP], [Customers PP])
+Color Customers vs PP = if([Customers vs PP %] < 0, "#E74C3C", "#17A589")
+
+Revenue per Customer = divide([Total Revenue], [Active Customers])
+Rev per Customer PP = if(hasonevalue(dim_date[month]), calculate([Revenue per Customer], dateadd(dim_date[Date], -1, month)), calculate([Revenue per Customer], sameperiodlastyear(dim_date[Date])))
+Rev per Customer vs PP % = divide([Revenue per Customer] - [Rev per Customer PP], [Rev per Customer PP])
+Color Rev per Customer vs PP = if([Rev per Customer vs PP %] < 0, "#E74C3C", "#17A589")
+
+Items per Order = divide(calculate(countrows(fact_order_items), not fact_order_items[status] in {"Cancelled", "Returned"}), [Net Orders])
+Items per Order PP = if(hasonevalue(dim_date[month]), calculate([Items per Order], dateadd(dim_date[Date], -1, month)), calculate([Items per Order], sameperiodlastyear(dim_date[Date])))
+Items per Order vs PP % = divide([Items per Order] - [Items per Order PP], [Items per Order PP])
+Color Items per Order vs PP = if([Items per Order vs PP %] < 0, "#E74C3C", "#17A589")
+```
+
+Đã kiểm tra: 12/2023 (so LM) AOV 84.71 vs 81.37, Customers 5,946 vs 5,027, Rev/Customer 91.27 vs 85.53, Items/Order 1.42 vs 1.39. Cả năm 2023 (so LY) AOV 86.31 vs 85.04, Customers 35,475 vs 19,408, Rev/Customer 107.73 vs 96.25, Items/Order 1.44 vs 1.45.
 
 ### 3b. Measure cho trang 2 (Products & Customers) và trang 3 (Operations)
 
