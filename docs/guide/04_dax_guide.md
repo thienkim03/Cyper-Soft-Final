@@ -467,6 +467,30 @@ return
 | Jeans (trong top 5) | 1.847.883 (tổng top 5 - sai) | 437.519 (đúng) |
 | Socks (ngoài top 5) | 1.847.883 (sai) | trống (đúng) |
 
+### YoY cho trang Timerange View (trục là năm)
+
+```dax
+Revenue YoY % =
+var ly = calculate([Total Revenue], sameperiodlastyear(dim_date[Date]))
+return divide([Total Revenue] - ly, ly)
+
+Color Revenue YoY = if([Revenue YoY %] < 0, "#E74C3C", "#17A589")
+```
+
+Dùng cho cột YoY trong Matrix "Yearly Summary" và đường trong combo chart. Năm đầu (2019) không có năm trước -> trống. Đã kiểm tra: 2020 +240.3%, 2021 +94.0%, 2022 +71.3%, 2023 +104.6%.
+
+### Top 10 Country (trang 2, chart "Revenue by Country")
+
+```dax
+Revenue Top 10 Country =
+var top10 = topn(10, all(dim_users[country]), [Total Revenue])
+return calculate([Total Revenue], keepfilters(top10))
+```
+
+Không cần DAX: Filters pane -> `country` -> Filter type **Top N** -> Top 10 -> By value `Total Revenue` -> Apply filter.
+
+Đã kiểm tra (03/2022): 12 nước có doanh thu, measure giữ 10 nước (China 45,020 ... Japan 2,220), Belgium và Poland ra trống.
+
 ---
 
 ## 13. Measure dạng chữ
